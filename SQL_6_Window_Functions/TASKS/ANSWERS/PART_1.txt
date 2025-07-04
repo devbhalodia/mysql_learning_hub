@@ -1,0 +1,116 @@
+WINDOW FUNCTIONS TASK:- 
+1. 
+SELECT * FROM (SELECT *,
+RANK() OVER(ORDER BY claim DESC) AS 'rank'
+FROM insurance) t 
+WHERE t.rank IN (1,2,3,4,5)
+
+2.
+SELECT *, 
+ROUND(AVG(claim) OVER(PARTITION BY children)) AS 'avg_claim'
+FROM insurance
+
+3. 
+SELECT PatientID, region, claim FROM (SELECT *, 
+FIRST_VALUE (PatientID) OVER (PARTITION BY region ORDER BY claim DESC) AS 'top_id',
+FIRST_VALUE (PatientID) OVER (PARTITION BY region ORDER BY claim ASC) AS 'bottom_id'
+FROM insurance) t
+WHERE t.PatientID = top_id OR t.PatientID = bottom_id
+
+4. 
+SELECT *, 
+SUM(
+CASE WHEN smoker = 'Yes' THEN 1 ELSE 0 END) OVER(PARTITION BY age) *100/ COUNT(*) OVER(PARTITION BY age) AS 'percentage'
+FROM insurance
+
+how it is done?
+step 1:- 
+count number of smokers in particular age group. 
+so, SUM(CASE) used and then partitioned by age, so that we don't count the no. of smokers in the entire dataset but only inside the age group. 
+
+step 2:- 
+count total people in that age group (smokers + non smokers)
+so, again we don't want to count all people inside the dataset but only of the specific age group. so, over(partition) applied here too. 
+
+5. 
+SELECT *, ROUND(t.claim - t.first_value) AS 'diff' FROM (SELECT *, 
+FIRST_VALUE (claim) OVER(ORDER BY claim ASC) AS 'first_value'
+FROM insurance) t 
+
+6. 
+SELECT *, ABS(t.claim - t.avg_claim) AS 'diff' FROM (SELECT *, 
+ROUND(AVG(claim) OVER(PARTITION BY children)) AS 'avg_claim'
+FROM insurance) t 
+
+7.
+SELECT *,
+DENSE_RANK() OVER(ORDER BY first_val ASC) AS 'rank'
+FROM (SELECT *, 
+FIRST_VALUE (bmi) OVER(PARTITION BY region ORDER BY bmi DESC)as 'first_val' 
+FROM insurance) t
+
+explanation:- 
+step 1:- 
+calculating the highest bmi for each region:- 
+SELECT *, 
+FIRST_VALUE (bmi) OVER(PARTITION BY region ORDER BY bmi DESC)as 'first_val' 
+FROM insurance
+
+step 2:-
+now you need to also rank these highest values. 
+it is application of a window function to the col obtained from window function. in other words, window func ON 
+window func. 
+in such case, make a new table which includes the old window func too:- 
+SELECT * 
+FROM (SELECT *, 
+FIRST_VALUE (bmi) OVER(PARTITION BY region ORDER BY bmi DESC)as 'first_val' 
+FROM insurance) t
+
+step 3:- 
+now it is very easy to apply the other window function of the first__val col:- 
+SELECT *,
+DENSE_RANK() OVER(ORDER BY first_val ASC) AS 'rank'
+FROM (SELECT *, 
+FIRST_VALUE (bmi) OVER(PARTITION BY region ORDER BY bmi DESC)as 'first_val' 
+FROM insurance) t
+
+8. 
+SELECT *, ROUND(f.highest_claim - f.claim) AS 'diff' FROM (SELECT *,
+FIRST_VALUE (claim) OVER(PARTITION BY first_val ORDER BY claim DESC)  AS 'highest_claim'
+FROM (SELECT *,
+FIRST_VALUE (bmi) OVER(PARTITION BY region ORDER BY bmi DESC) AS 'first_val'
+FROM insurance) t) f
+
+9. 
+SELECT *, ABS(t.claim - t.highest_claim) AS 'claim_diff' FROM (SELECT *, 
+FIRST_VALUE (claim) OVER (PARTITION BY bmi, region, smoker ORDER BY claim DESC) AS 'highest_claim' 
+FROM insurance) t
+
+10. 
+SELECT * FROM (SELECT * ,
+DENSE_RANK() OVER(PARTITION BY rank_val ORDER BY claim DESC) AS 'claim_rank'
+FROM (SELECT *, 
+DENSE_RANK() OVER(ORDER BY age) AS 'rank_val'
+FROM insurance) t
+) f 
+WHERE f.claim_rank IN (1,2,3)
+
+11.
+SELECT *, 
+ROUND(AVG(claim) OVER (PARTITION BY patientID ORDER BY claim ASC ROWS BETWEEN 1 PRECEDING AND CURRENT ROW)) as 'rolling_avg'
+FROM insurance
+
+12.
+SELECT *, 
+FIRST_VALUE (claim) OVER(PARTITION BY region, gender ORDER BY age ASC) as 'first_val'
+FROM insurance
+WHERE diabetic = 'No' AND bmi BETWEEN 25 AND 30
+
+
+I was doing it like:- 
+SELECT * FROM (SELECT *, 
+FIRST_VALUE (claim) OVER(PARTITION BY region, gender ORDER BY age ASC) as 'first_val'
+FROM insurance) t
+WHERE t.diabetic = 'No' AND t.bmi BETWEEN 25 AND 30
+
+which is WRONG. this is because while partitioning, you are also considering people who are diabetic and whose bmi not between 25 and 30 too and then computing first_val which is not intended. so, in this case, WHERE applied while portioning only. 

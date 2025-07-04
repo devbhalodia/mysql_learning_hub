@@ -1,0 +1,126 @@
+WINDOWS FUNCTION PART - 2:- 
+
+REAL WORLD APPLICATIONS:- 
+
+-----------------------------------------------------------------------------
+
+1. RANKING:- 
+q) top 5 batsman of each team according to the runs they made. 
+
+using ipl dataset where each row represents one ball and run made in that ball. 
+step 1:- 
+find total runs made by each player in each team. 
+SELECT BattingTeam, batter, SUM(batsman_run) FROM ipl 
+GROUP BY BattingTeam, batter
+
+we get total runs made by each player of that team. 
+
+step 2:- now, rank the players using dense_rank
+SELECT BattingTeam, batter, SUM(batsman_run) AS 'total_runs',
+DENSE_RANK() OVER(PARTITION BY BattingTeam ORDER BY SUM(batsman_run) DESC AS 'rank_within_team')
+FROM ipl 
+GROUP BY BattingTeam, batter
+
+step 3:- 	
+select the top 5 ranks:- 
+SELECT * FROM (SELECT BattingTeam, batter, SUM(batsman_run) AS 'total_runs',
+DENSE_RANK() OVER(PARTITION BY BattingTeam ORDER BY SUM(batsman_run) DESC AS 'rank_within_team')
+FROM ipl 
+GROUP BY BattingTeam, batter
+) t 
+WHERE t.rank_within_team < 6
+
+-----------------------------------------------------------------------------
+
+2. CUMULATIVE SUM:- 
+it is simply the sum TILL NOW:- for eg:-
+sales    cumsum
+100       100
+150       250
+250       500
+400       900
+
+
+here, you need to simply set the frame mode to:- unbounded preceding and current row. 
+this mode is selected so that when we sum, we are considering all rows from start to current row, thereby giving us the cumsum. 
+q) find total runs done by v.kohli after his 50th match and after his 100th match. 
+using ipl dataset. 
+
+step 1:- 
+first, group by the match id, so that we get total runs done in each match. 
+SELECT ID, SUM(batsman_run) AS 'runs'
+FROM ipl
+WHERE batter = 'V Kohli'
+GROUP BY ID
+
+o/p
+ID  runs
+1    1
+2    23
+3    13
+4    12
+5    1
+6    9
+7    34
+
+step 2:- 
+also make a separate columns having the cumsum. 
+SELECT ID, SUM(batsman_run) AS 'runs',
+SUM(SUM(batsman_run) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS 'total_runs'
+FROM ipl
+WHERE batter = 'V Kohli'
+GROUP BY ID
+
+o/p
+ID  runs  total_runs
+1    1       1
+2    23      24
+3    13      37
+4    12      49
+5    1       50
+6    9       59
+7    34      93
+
+step 3:- 
+Select the match no. 50 and 100 for getting total runs till that match. 
+SELECT ID, SUM(batsman_run) AS 'runs',
+SUM(SUM(batsman_run) OVER(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS 'total_runs'
+FROM ipl
+WHERE batter = 'V Kohli'
+GROUP BY ID
+WHERE ID = 50 OR ID = 100
+-----------------------------------------------------------------------------
+
+3. CUMULATIVE AVERAGE:-
+same as cumsum, where frame mode = ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+
+eg:- 
+AVG(SUM(batsman_run)) OVER (ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+
+-----------------------------------------------------------------------------
+
+4. RUNNING AVERAGE (also called rolling average):-
+here, we fix a window size, and this window shifts by 1 each time, and each time, we get a new avg of all those items present inside the window. 
+for eg:- window_size = 5
+so, avg of 5 items = running avg
+when window shifts, one new item added and one old item deleted and now again, avg of 5 items is calculated.  
+
+eg:-
+AVG(SUM(batsman_run)) OVER (ROWS BETWEEN 9 PRECEDING AND CURRENT ROW)
+
+this creates a window of 10 items. 
+
+-----------------------------------------------------------------------------
+
+5. PERCENT OF TOTAL:- 
+percentage of proportion.
+
+for eg:- 
+category   total_sales   percent_of_total
+a            500              50% 
+b            300              30%
+c            200              20%
+
+we got this from:- 
+(total_sales/SUM(total_sales) OVER())*100 AS 'percent_of_total'
+

@@ -1,0 +1,339 @@
+SQL - WINDOW FUNCTIONS:- 
+
+Almost same as GROUP BY. in group by, we get a whole new table where in we don't get all the rows. instead, we get the grouped values of the columns used inside group by clause. 
+
+but, when using window function, we get the whole table initially along with a whole new row, with values in groups if specified. 
+
+---------------------------------------------------------------------------------
+
+1. OVER()
+
+MAIN USE:- avoids hard correlated queries:- 
+
+eg:- find all the students who have marks higher than avg marks of their respective branch. 
+in this question, we have to use correlated query which is HARD. 
+
+using window function:- 
+
+step 1:- 
+SELECT *, AVG(marks) OVER() FROM campusx.marks
+
+we selected all columns and an extra column called AVG(marks) added to it. 
+right now, AVG(marks) col will only have all rows filled with avg of marks of the entire dataset, with all rows having the same value.
+ 
+step 2:- 
+SELECT *, 
+AVG(marks) OVER(PARTITION BY BRANCH) FROM campusx.marks 
+
+now, all rows will be grouped according the branch values. so for eg:- all CS rows altogether. now, the AVG(marks) col will contain the avg of all the marks in a particular branch. 
+
+step 3:- 
+SELECT * FROM (SELECT *, 
+AVG(marks) OVER(PARTITION BY BRANCH) AS 'branch_avg' FROM campusx.marks ) t 
+WHERE t.marks > t.branch_avg
+
+here, table obtained in the o/p of step 2, we considered this whole table and gave it a name t. now, it's very easy to do the rest. 
+
+---------------------------------------------------------------------------------
+
+2. RANK / DENSE_RANK / ROW_NUMBER
+i) RANK:- 
+q) rank all the students according to their marks. the one with topmost marks is given rank 1. 
+SELECT *, 
+RANK() OVER(ORDER BY marks DESC)  
+FROM marks
+
+when ranking, you obviously need to specify according to which column you want to rank. here, it is marks. now, rank does not know the order in which to rank, hence we use ORDER BY marks DESC to ensure highest mark gets rank 1. 
+
+q) create branch wise ranking:- 
+SELECT *, 
+RANK() OVER(PARTITION BY branch ORDER BY marks DESC)  
+FROM marks
+
+NOTE:- when using RANK:- 
+if same marks: same rank. next student not given rank=2 but rank=3
+id       marks   rank
+student1  95      1 
+student2  95      1
+student3  89      3 
+
+ii) DENSE_RANK:- same as RANK, but here, when same marks, same rank given and next student given rank 2 and not 3. 
+
+iii) ROW_NUMBER:-
+assigns a 'unique' value to each row. it is same as rank but yaha pe koi order nahi hota. it uniquely identifies each row and removes duplicate rows. 
+
+question:- assign branch-wise roll no. for eg:- if branch CSE, then roll no. = CSE-1, CSE-2, and so on. 
+step 1:- 
+SELECT *, 
+ROW_NUMBER() OVER(PARTITION BY branch)
+FROM marks 
+
+this assigns unique no. to students of each branch. but here, this unique no. is NOT unique amongst different branches as:- 
+dev     CSE  1 
+bholu   CSE  2
+billu   ECE  1
+
+step 2:- 
+SELECT *, 
+CONCAT(branch,'-',ROW_NUMBER() OVER(PARTITION BY branch))
+FROM marks
+
+we get:- 
+dev     CSE  CSE-1 
+bholu   CSE  CSE-2
+billu   ECE  ECE-1
+
+boss-level question:- 
+inside the Zomato database:- 
+find top 2 most paying customers of each month:- 
+from the table orders:- 
+kaam ki chize:- 
+user_id, amount, date. 
+
+step 1:- 
+firstly, let's find the total amount spent by each customer in each month:- 
+SELECT MONTHNAME(date), user_id, SUM(amount) 
+FROM orders
+GROUP BY MONTHNAME(date), user_id
+ORDER BY MONTHNAME(date)
+
+if date = 2019-05-12, then MONTHNAME(date) gives us May. 
+
+step 2:- 
+SELECT MONTHNAME(date) AS 'month', user_id, SUM(amount) AS 'total',
+RANK() OVER(PARTITION BY MONTHNAME(date) ORDER BY SUM(amount) DESC) AS 'ranking'
+FROM orders
+GROUP BY MONTHNAME(date), user_id
+ORDER BY MONTHNAME(date)
+
+we ranked each user of each month according to the total amount he/she spent, with highest spending having rank=1.
+
+step 3:- fetching top 2 users.
+SELECT MONTHNAME(date) AS 'month', user_id, SUM(amount) AS 'total',
+RANK() OVER(PARTITION BY MONTHNAME(date) ORDER BY SUM(amount) DESC) AS 'ranking'
+FROM orders
+GROUP BY MONTHNAME(date), user_id
+ORDER BY MONTHNAME(date)
+WHERE t.ranking < 3
+
+---------------------------------------------------------------------------------
+
+3. FIRST_VALUE / LAST_VALUE / NTH_VALUE:-
+
+i) FIRST_VALUE:- 
+gives the first value of the column specified inside the OVER clause. 
+for eg:- give name of the student scoring the highest marks in the entire dataset. 
+SELECT *, 
+FIRST_VALUE(name) OVER (ORDER BY marks DESC) 
+FROM marks
+
+ORDER BY marks DESC me se jo sabse pehle marks aye, us marks ke corresponding jo name hoga, vo pure ke pure column me hoga. 
+for eg:- on doing ORDER BY marks DESC, the first marks was 98 and corresponding name being Deepak. 
+hence, all rows of the column having Deepak as the value. 
+
+name   branch  marks  output
+Deepak  CSE     98    Deepak
+Arpan   CSE     89    Deepak
+vinay   CSE     39    Deepak
+
+ii) LAST_VALUE:- 
+
+SELECT *, 
+LAST_VALUE(marks) OVER (ORDER BY marks DESC)
+FROM marks
+
+here, you may think that, when marks are arranged in the desc order, you will get the lowest value (in this dataset, it's 39) and all the rows of this new column will be filled with value 39. 
+BUT that is NOT the case. 
+
+What you think would have happened:- 
+name   branch  marks  output
+Deepak  CSE     98    39
+Arpan   CSE     89    39
+vinay   CSE     39    39
+
+
+What actually happened:- 
+name   branch  marks  output
+Deepak  CSE     98    98
+Arpan   CSE     89    89
+vinay   CSE     39    39
+
+why? For knowing why, you need to understand the topic 'Frames':- 
+I) ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW:- 
+this mode is by default. here, the rows from the start of the output till the current row is considered. 
+Now, in case of LAST_VALUE, why did unexpected happen? 
+1st row:- 
+o/p = 98  ----> 1st row (preceding) as well as the current row (last row). so no choice but to select it. 
+2nd row:- 
+o/p:-
+98
+89
+so 98 being preceding row and 89 being last row. so, 89 selected. 
+3rd row:- 
+98
+89
+39
+preceding = 98 and 89  and current row or last row = 39. 
+so last row = 39 selected. 
+
+due to this default mode, we get such unwanted result if LAST_VALUE is used. 
+for FIRST_VALUE, not a problem. Think yourself why. 
+
+II) ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING:
+1 row before (preceding) the current row and 1 row next to (following) the current row, AND the current row itself taken into consideration. 
+in total, 3 rows:- 
+preceding row
+current row
+following row
+
+III) ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING:- 
+this considers the WHOLE o/p column. hence, the problem faced in LAST_VALUE gets eradicated if this mode used.
+1st row:- 
+o/p:-
+98
+89
+39
+last val = 39
+2nd row:- 
+o/p:-
+98
+89
+39
+last val = 39
+3rd row:- 
+o/p:-
+98
+89
+39
+last val = 39
+
+IV) ROWS BETWEEN 3 PRECEDING AND 2 FOLLOWING:- 
+in total, 6 rows:-
+3 preceding rows
+current row
+2 following rows
+
+So, how to use last_value function?
+
+SELECT *, 
+LAST_VALUE(marks) OVER(PARTITION BY branch
+                       ORDER BY marks DESC 
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM marks
+
+iii) NTH_VALUE:- 
+here, you can select nth row from the o/p. 
+for eg:- give me the second topper from all the branches. 
+SELECT *,
+NTH_VALUE(name,2) OVER(PARTITION BY branch
+                       ORDER BY marks DESC 
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM marks
+
+here, if the nth value specified by you is out of the range, null returned. 
+for eg:- give me 6th topper of each branch. 
+SELECT *,
+NTH_VALUE(name,6) OVER(PARTITION BY branch
+                       ORDER BY marks DESC 
+                       ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+FROM marks
+
+ek branch me max 5 students hai. hence null values in the output. 
+
+boss-level question:- 
+Q) give name of student, branch and marks of the topper student in each branch. 
+
+step 1:- 
+SELECT *,
+FIRST_VALUE(name) OVER(PARTITION BY branch ORDER BY marks DESC) AS 'topper_name', 
+FIRST_VALUE(marks) OVER(PARTITION BY branch ORDER BY marks DESC) AS 'topper_marks'
+FROM marks
+
+this gives 2 columns, one with name of that student and one with marks of that student.    
+but in final o/p, we just need name of the topper, marks, and branch. 
+
+step 2:- 
+SELECT * FROM (SELECT *,
+FIRST_VALUE(name) OVER(PARTITION BY branch ORDER BY marks DESC) AS 'topper_name', 
+FIRST_VALUE(marks) OVER(PARTITION BY branch ORDER BY marks DESC) AS 'topper_marks'
+FROM marks) t 
+
+step 3:- 
+SELECT name, marks, branch FROM (SELECT *,
+FIRST_VALUE(name) OVER(PARTITION BY branch ORDER BY marks DESC) AS 'topper_name', 
+FIRST_VALUE(marks) OVER(PARTITION BY branch ORDER BY marks DESC) AS 'topper_marks'
+FROM marks) t 
+WHERE t.name = topper_name AND t.marks = topper_marks
+
+if Q) was that find the student name, marks and branch of that student in each branch scoring least marks:- 
+
+SELECT name, marks, branch FROM (SELECT *,
+FIRST_VALUE(name) OVER(PARTITION BY branch ORDER BY marks ASC) AS 'thoth_name', 
+FIRST_VALUE(marks) OVER(PARTITION BY branch ORDER BY marks ASC) AS 'thoth_marks'
+FROM marks) t 
+WHERE t.name = thoth_name AND t.marks = thoth_marks
+
+---------------------------------------------------------------------------------
+
+4. LEAD & LAG:- 
+
+1. LAG():-
+here, it creates a new col where it has values of col that is specified inside LAG(), but it is lagging behind by one step. 
+for eg:- 
+SELECT *, 
+LAG(marks) OVER(ORDER BY student_id)
+FROM marks
+
+id  marks   o/p 
+1   82      null
+2   91       82
+3   93       91
+4   69       93
+5   70       69
+
+o/p has marks of the previous row marks. 
+
+2. LEAD():-  
+values lead by one step. 
+
+id  marks   o/p 
+1   82       91
+2   91       93
+3   93       69
+4   69       70
+5   70      null
+
+application of lead/lag:- 
+Q) calculate month by month revenue growth of Zomato:- 
+step 1:- finding total revenue in each month:- 
+SELECT MONTHNAME(date), SUM(amount) 
+FROM Zomato.orders
+GROUP BY MONTHNAME(date)
+ORDER BY MONTHNAME(date) ASC
+
+we get total revenue each month. 
+
+step 2:- using LAG()
+SELECT MONTHNAME(date), SUM(amount), 
+LAG(SUM(amount)) OVER(ORDER BY MONTHNAME(date))
+FROM Zomato.orders
+GROUP BY MONTHNAME(date)
+ORDER BY MONTHNAME(date) ASC
+
+why use lag? 
+month     sum      o/p
+may       2425     null
+june      3220     2425
+july      4845     4845
+
+what you want to calculate is month by month revenue growth rate. 
+formula:- (current month - prev month)*100 / (prev month)
+this is only possible when both the values in the SAME row, which is possible when using LAG(). 
+
+step 3:- calculating growth rate:- 
+SELECT MONTHNAME(date), SUM(amount), 
+(SUM(amount)-LAG(SUM(amount)) OVER(ORDER BY MONTHNAME(date)))*100/(LAG(SUM(amount)) OVER(ORDER BY MONTHNAME(date))) AS 'growth_rate'
+FROM Zomato.orders
+GROUP BY MONTHNAME(date)
+ORDER BY MONTHNAME(date) ASC
+

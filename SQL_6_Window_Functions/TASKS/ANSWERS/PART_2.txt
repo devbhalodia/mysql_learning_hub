@@ -1,0 +1,100 @@
+windows function part 2 task:-
+
+6. 
+SELECT `Condition`, Indication, ROUND(AVG(Satisfaction),2) AS 'avg_satisfaction'
+FROM drug
+GROUP BY `Condition`, Indication
+
+we can use the window functions too. but it is just that when using window functions, the rows get repeated for each group and if we don't want repeating rows, we can simply use group by. 
+
+7.
+SELECT `Type`, AVG(EaseOfUse), AVG(Satisfaction) FROM (SELECT * FROM (SELECT *,
+ROW_NUMBER() OVER(PARTITION BY `Type` ORDER BY Price ASC) AS 'rn',
+COUNT(*) OVER(PARTITION BY `Type`) AS 'total_rows'
+FROM drug) t
+WHERE t.rn > (t.total_rows/2)) f
+GROUP BY f.`Type`;
+
+so, in this question:-
+we want to compute the avg of ease of use and satisfaction for each type, but ONLY for prices > median prices for each type. 
+
+step 1:- 
+for each type, calculate the median prices. for that, we use row_number which gives a unique number to each row ordered by price. this is done so that we get total rows in each group and then with those total rows, we can find out median being total_rows/2 and then we can select all those rows where the row_number is greater than median value so that we can have the prices > median prices. 
+SELECT *,
+ROW_NUMBER() OVER(PARTITION BY `Type` ORDER BY Price ASC) AS 'rn',
+COUNT(*) OVER(PARTITION BY `Type`) AS 'total_rows'
+FROM drug
+
+step 2:- 
+SELECT * FROM (SELECT *,
+ROW_NUMBER() OVER(PARTITION BY `Type` ORDER BY Price ASC) AS 'rn',
+COUNT(*) OVER(PARTITION BY `Type`) AS 'total_rows'
+FROM drug) t
+WHERE t.rn > (t.total_rows/2)
+
+step 3:- 
+finally computing the avg. 
+SELECT `Type`, AVG(EaseOfUse), AVG(Satisfaction) FROM (SELECT * FROM (SELECT *,
+ROW_NUMBER() OVER(PARTITION BY `Type` ORDER BY Price ASC) AS 'rn',
+COUNT(*) OVER(PARTITION BY `Type`) AS 'total_rows'
+FROM drug) t
+WHERE t.rn > (t.total_rows/2)) f
+GROUP BY f.`Type`;
+
+8.
+SELECT *,
+SUM(EaseOfUse) OVER(PARTITION BY `Type` ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS 'cumsum'
+FROM drug;
+
+9. 
+SELECT `Condition`, Satisfaction AS 'median_sat' FROM (SELECT *,
+ROW_NUMBER () OVER(PARTITION BY `Condition` ORDER BY Satisfaction) AS 'rn',
+COUNT(*) OVER(PARTITION BY `Condition`) AS 'total_rows'
+FROM drug) t
+WHERE rn = (total_rows)/2
+ORDER BY median_sat DESC;  
+
+10. 
+SELECT *,
+AVG(Price) OVER (PARTITION BY `Condition` ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS 'running_avg'
+FROM drug
+ORDER BY `Condition`, Drug ASC; 
+
+11.
+SELECT *,
+(ABS(lagged_review - Reviews) / Reviews)*100 AS 'percent_change'
+FROM (SELECT *,
+LAG(Reviews) OVER(PARTITION BY Drug) AS 'lagged_review'
+FROM drug) t
+ORDER BY (ABS(lagged_review - Reviews) / Reviews)*100 DESC
+
+12.
+SELECT *, 
+Satisfaction*100/SUM(Satisfaction) OVER (PARTITION BY `Type` ) AS 'percent_of_total'
+FROM drug
+ORDER BY `Type`, percent_of_total DESC
+
+13. 
+SELECT *,
+SUM(sum) OVER (PARTITION BY `Condition` ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS 'cumsum'
+FROM (SELECT `Condition`, `Form`, SUM(Effective) AS 'sum'
+FROM drug
+GROUP BY `Condition`, `Form`) t
+
+14. 
+SELECT * ,
+DENSE_RANK() OVER(ORDER BY avg DESC)
+FROM (SELECT `Type`, AVG(EaseOfUse) as 'avg'
+FROM drug
+GROUP BY `Type`) t
+
+15. 
+SELECT `Condition`,
+AVG(Effective)
+FROM (SELECT *,
+ROW_NUMBER() OVER(PARTITION BY `Condition` ORDER BY Reviews DESC) AS 'rank'
+FROM drug) t
+WHERE t.rank <=3
+GROUP BY `Condition`
+
+
